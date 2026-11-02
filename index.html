@@ -652,6 +652,36 @@ fog:
 '<line x1="16" y1="70" x2="84" y2="70"/>'+
 '</g></svg>',
 
+sunrise:
+'<svg viewBox="0 0 100 100">'+
+'<path d="M20 66a30 30 0 0 1 60 0z" fill="#FFE066" stroke="#FFF6D6" stroke-width="2.5" stroke-linejoin="round"/>'+
+'<g stroke="#FFE066" stroke-width="5" stroke-linecap="round">'+
+'<line x1="12" y1="66" x2="5" y2="66"/>'+
+'<line x1="88" y1="66" x2="95" y2="66"/>'+
+'<line x1="24" y1="40" x2="19" y2="35"/>'+
+'<line x1="76" y1="40" x2="81" y2="35"/>'+
+'</g>'+
+'<line x1="8" y1="75" x2="92" y2="75" stroke="#FFE9C4" stroke-width="5" stroke-linecap="round"/>'+
+'<g stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none">'+
+'<line x1="50" y1="12" x2="50" y2="30"/>'+
+'<polyline points="41,20 50,11 59,20"/>'+
+'</g></svg>',
+
+sunset:
+'<svg viewBox="0 0 100 100">'+
+'<path d="M20 66a30 30 0 0 1 60 0z" fill="#FFD84D" stroke="#FFF6D6" stroke-width="2.5" stroke-linejoin="round"/>'+
+'<g stroke="#FFD84D" stroke-width="5" stroke-linecap="round">'+
+'<line x1="12" y1="66" x2="5" y2="66"/>'+
+'<line x1="88" y1="66" x2="95" y2="66"/>'+
+'<line x1="24" y1="40" x2="19" y2="35"/>'+
+'<line x1="76" y1="40" x2="81" y2="35"/>'+
+'</g>'+
+'<line x1="8" y1="75" x2="92" y2="75" stroke="#FFD2B0" stroke-width="5" stroke-linecap="round"/>'+
+'<g stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none">'+
+'<line x1="50" y1="12" x2="50" y2="30"/>'+
+'<polyline points="41,22 50,31 59,22"/>'+
+'</g></svg>',
+
 cloudMoon:
 '<svg viewBox="0 0 100 100">'+
 '<path d="M64 10a26 26 0 1 0 18 43 21 21 0 0 1-18-43z" fill="#DCE4EF"/>'+
@@ -822,7 +852,9 @@ return"http://api.open-meteo.com/v1/forecast"+
 "is_day"+
 "&daily="+
 "temperature_2m_max,"+
-"temperature_2m_min"+
+"temperature_2m_min,"+
+"sunrise,"+
+"sunset"+
 "&timezone=Asia%2FTokyo"+
 "&forecast_days=3"+
 "&wind_speed_unit=ms"+
@@ -853,7 +885,9 @@ return"http://api.open-meteo.com/v1/forecast"+
 "is_day"+
 "&daily="+
 "temperature_2m_max,"+
-"temperature_2m_min"+
+"temperature_2m_min,"+
+"sunrise,"+
+"sunset"+
 "&timezone=Asia%2FTokyo"+
 "&forecast_days=3"+
 "&wind_speed_unit=ms"+
@@ -1134,6 +1168,11 @@ document.getElementById(
 ).style.background=
 info.bg;
 
+cachedDaily=daily;
+cachedCode=code;
+cachedIsDay=isDay;
+applyGlow();
+
 clearWeatherError();
 
 updateWeatherTime();
@@ -1229,6 +1268,156 @@ pad2(date.getMonth()+1)+
 pad2(date.getDate())+
 "-"+
 pad2(date.getHours());
+
+}
+
+
+var cachedDaily=null;
+var cachedCode=null;
+var cachedIsDay=1;
+
+var GLOW_BG_SUNRISE="linear-gradient(165deg,#ffcf8a 0%,#ff9a62 50%,#d9627a 100%)";
+var GLOW_BG_SUNSET="linear-gradient(165deg,#ffb35c 0%,#ff7a45 45%,#a8456b 100%)";
+
+
+/* その日の日の出・日の入り(Open-Meteoの値なので季節で自動的に変わる) */
+function getSunTimesFor(date){
+
+if(
+!cachedDaily||
+!cachedDaily.time||
+!cachedDaily.sunrise||
+!cachedDaily.sunset
+)
+return null;
+
+var key=
+date.getFullYear()+
+"-"+
+pad2(date.getMonth()+1)+
+"-"+
+pad2(date.getDate());
+
+var i;
+
+for(
+i=0;
+i<cachedDaily.time.length;
+i++
+){
+
+if(cachedDaily.time[i]===key){
+
+if(
+!cachedDaily.sunrise[i]||
+!cachedDaily.sunset[i]
+)
+return null;
+
+return{
+rise:parseISOTime(cachedDaily.sunrise[i]),
+set:parseISOTime(cachedDaily.sunset[i])
+};
+
+}
+
+}
+
+return null;
+
+}
+
+
+/* 朝焼け・夕焼けの時間帯: 日の出の30分前〜45分後 / 日の入りの45分前〜30分後 */
+function getGlowKind(now){
+
+var s=getSunTimesFor(now);
+
+if(!s)
+return"";
+
+var t=now.getTime();
+
+if(
+t>=s.rise.getTime()-30*60000&&
+t<=s.rise.getTime()+45*60000
+)
+return"sunrise";
+
+if(
+t>=s.set.getTime()-45*60000&&
+t<=s.set.getTime()+30*60000
+)
+return"sunset";
+
+return"";
+
+}
+
+
+/* 時間別の1コマが、日の出・日の入りを含む時間帯かどうか */
+function getSunEvent(slotTime){
+
+var s=getSunTimesFor(slotTime);
+
+if(!s)
+return"";
+
+if(s.rise.getHours()===slotTime.getHours())
+return"sunrise";
+
+if(s.set.getHours()===slotTime.getHours())
+return"sunset";
+
+return"";
+
+}
+
+
+/* 時間別の1コマが昼かどうか(日の出・日の入りの実際の時刻で判定) */
+function getSlotIsDay(slotTime){
+
+var s=getSunTimesFor(slotTime);
+
+if(!s)
+return getIsDayFromHour(slotTime.getHours());
+
+var mid=slotTime.getTime()+30*60000;
+
+return mid>=s.rise.getTime()&&mid<s.set.getTime();
+
+}
+
+
+/* 天気カード本体(アイコン・文字・背景)を描く。朝焼け・夕焼けの時間帯は晴れ〜くもりのときだけオレンジに */
+function applyGlow(){
+
+if(cachedCode===null)
+return;
+
+var info=getWeatherInfo(cachedCode,cachedIsDay);
+var kind=getGlowKind(new Date());
+
+var icon=info.icon;
+var desc=info.desc;
+var bg=info.bg;
+
+if(kind&&cachedCode<=3){
+
+icon=kind==="sunrise"?ICONS.sunrise:ICONS.sunset;
+
+desc=
+(kind==="sunrise"?"朝焼け":"夕焼け")+
+"・"+
+info.desc;
+
+bg=kind==="sunrise"?GLOW_BG_SUNRISE:GLOW_BG_SUNSET;
+
+}
+
+document.getElementById("weatherIconWrap").innerHTML=icon;
+document.getElementById("weatherConditionSmall").innerHTML=desc;
+document.getElementById("weatherPanel").style.background=bg;
 
 }
 
@@ -1351,8 +1540,8 @@ hourly.weather_code[i]
 3;
 
 var isDay=
-getIsDayFromHour(
-hour
+getSlotIsDay(
+time
 );
 
 var hourInfo=
@@ -1360,6 +1549,19 @@ getWeatherInfo(
 code,
 isDay?1:0
 );
+
+var sunEvent=
+getSunEvent(
+time
+);
+
+var hourIcon=hourInfo.icon;
+
+if(sunEvent==="sunrise")
+hourIcon=ICONS.sunrise;
+
+if(sunEvent==="sunset")
+hourIcon=ICONS.sunset;
 
 var item=
 document.createElement(
@@ -1382,13 +1584,19 @@ rain+
 '%'+
 '</div>';
 
+if(sunEvent==="sunrise")
+rainHTML='<div class="hour-rain">日の出</div>';
+
+if(sunEvent==="sunset")
+rainHTML='<div class="hour-rain">日の入</div>';
+
 item.innerHTML=
 '<div class="hour-time">'+
 pad2(hour)+
 '時'+
 '</div>'+
 '<div class="hour-icon">'+
-hourInfo.icon+
+hourIcon+
 '</div>'+
 '<div class="hour-temp">'+
 temp+
@@ -1421,6 +1629,8 @@ pad2(now.getMinutes());
 
 
 function showWeatherError(){
+
+cachedCode=null;
 
 document.getElementById(
 "weatherConditionSmall"
@@ -1580,138 +1790,230 @@ date.getMinutes()
 var newsCallbackNumber=0;
 
 
-function fetchNHKNews(callback){
+var newsDebug="";
 
-newsCallbackNumber++;
+function jsonpRss2json(baseUrl,label,done){
 
 var callbackName=
 "nhkNewsCallback_"+
 new Date().getTime()+
-"_"+newsCallbackNumber;
+"_"+
+(++newsCallbackNumber);
 
-var script=
-document.createElement(
-"script"
-);
-
+var script=document.createElement("script");
 var finished=false;
 var timer=null;
 
-window[callbackName]=
-function(data){
-
-if(finished)
-return;
-
-finished=true;
-
-if(timer!==null)
-clearTimeout(timer);
-
+function cleanup(){
 try{
+if(script.parentNode)
+script.parentNode.removeChild(script);
+}catch(e){}
+try{
+delete window[callbackName];
+}catch(e){
+window[callbackName]=null;
+}
+}
 
+function finish(items,reason){
+if(finished)return;
+finished=true;
+if(timer!==null)clearTimeout(timer);
+if(!items)newsDebug+=label+":"+reason+" ";
+cleanup();
+done(items);
+}
+
+window[callbackName]=function(data){
+try{
 if(
 data&&
 data.status==="ok"&&
 data.items&&
 data.items.length
 )
-
-callback(
-data.items
-);
-
+finish(data.items);
 else
-callback(null);
-
+finish(null,"data");
 }catch(e){
+finish(null,"err");
+}
+};
 
-callback(null);
+script.onerror=function(){
+finish(null,"load");
+};
+
+script.src=
+baseUrl+
+"?rss_url="+
+encodeURIComponent(NHK_RSS)+
+"&callback="+callbackName+
+"&_="+new Date().getTime();
+
+document.getElementsByTagName("head")[0].appendChild(script);
+
+timer=setTimeout(function(){
+finish(null,"timeout");
+},10000);
 
 }
 
-cleanup();
 
-};
+function rfc822ToUtcText(value){
+
+var date=new Date(value);
+
+if(isNaN(date.getTime()))
+return"";
+
+return(
+date.getUTCFullYear()+"-"+
+pad2(date.getUTCMonth()+1)+"-"+
+pad2(date.getUTCDate())+" "+
+pad2(date.getUTCHours())+":"+
+pad2(date.getUTCMinutes())+":"+
+pad2(date.getUTCSeconds())
+);
+
+}
 
 
-function cleanup(){
+function parseRssXml(text){
+
+var items=[];
 
 try{
 
-if(script.parentNode)
-
-script.parentNode.removeChild(
-script
+var doc=
+(new DOMParser()).parseFromString(
+text,
+"text/xml"
 );
+
+var nodes=doc.getElementsByTagName("item");
+var i;
+
+function tagText(node,name){
+var el=node.getElementsByTagName(name)[0];
+return el?(el.textContent||""):"";
+}
+
+for(i=0;i<nodes.length;i++){
+
+items.push({
+title:tagText(nodes[i],"title"),
+link:tagText(nodes[i],"link"),
+description:tagText(nodes[i],"description"),
+pubDate:rfc822ToUtcText(
+tagText(nodes[i],"pubDate")
+)
+});
+
+}
 
 }catch(e){}
 
+return items;
+
+}
+
+
+function xhrNHK(done){
+
+var xhr=new XMLHttpRequest();
+var finished=false;
+
+function finish(items,reason){
+if(finished)return;
+finished=true;
+if(!items||!items.length)newsDebug+="C:"+reason+" ";
+done(items);
+}
+
 try{
 
-delete window[callbackName];
+xhr.open(
+"GET",
+NHK_RSS+"?_="+new Date().getTime(),
+true
+);
 
-}catch(e){
+try{
+xhr.timeout=10000;
+}catch(e){}
 
-window[callbackName]=null;
+xhr.onreadystatechange=function(){
 
-}
+if(xhr.readyState!==4)return;
 
-}
-
-
-script.onerror=
-function(){
-
-if(finished)
-return;
-
-finished=true;
-
-if(timer!==null)
-clearTimeout(timer);
-
-callback(null);
-
-cleanup();
+if(xhr.status>=200&&xhr.status<300)
+finish(parseRssXml(xhr.responseText),"xml");
+else
+finish(null,"http"+xhr.status);
 
 };
 
+xhr.onerror=function(){
+finish(null,"net");
+};
 
-script.src=
-RSS2JSON+
-"?rss_url="+
-encodeURIComponent(
-NHK_RSS
-)+
-"&count=10"+
-"&callback="+
-callbackName+
-"&_="+
-new Date().getTime();
+xhr.ontimeout=function(){
+finish(null,"timeout");
+};
 
-document.getElementsByTagName(
-"head"
-)[0].appendChild(
-script
-);
+xhr.send(null);
 
-timer=
-setTimeout(
-function(){
+}catch(e){
 
-if(finished)
-return;
+finish(null,"err");
 
-finished=true;
+}
 
-callback(null);
+}
 
-cleanup();
 
+function fetchNHKNews(callback){
+
+newsDebug="";
+
+var tries=[
+function(done){
+jsonpRss2json("http://api.rss2json.com/v1/api.json","A",done);
 },
-20000
-);
+function(done){
+jsonpRss2json(RSS2JSON,"B",done);
+},
+function(done){
+xhrNHK(done);
+}
+];
+
+var n=0;
+
+function next(){
+
+if(n>=tries.length){
+callback(null);
+return;
+}
+
+var run=tries[n];
+n++;
+
+run(function(items){
+
+if(items&&items.length)
+callback(items);
+else
+next();
+
+});
+
+}
+
+next();
 
 }
 
@@ -1865,7 +2167,7 @@ if(
 ){
 
 status.innerHTML=
-"更新失敗";
+"更新失敗 "+newsDebug;
 
 return;
 
@@ -2053,6 +2355,11 @@ checkForecastHourChange,
 30000
 );
 
+setInterval(
+applyGlow,
+30000
+);
+
 
 document.addEventListener(
 "visibilitychange",
@@ -2071,6 +2378,20 @@ loadNews();
 }
 
 );
+
+// タップで全画面 / もう一度タップで解除(ニュースのリンクをタップしたときは何もしない)
+document.addEventListener("click", function(e){
+if(e.target.closest && e.target.closest("a")) return;
+var el = document.documentElement;
+var isFull = document.fullscreenElement || document.webkitFullscreenElement;
+if(!isFull){
+var req = el.requestFullscreen || el.webkitRequestFullscreen;
+if(req) req.call(el).catch(function(err){ console.error(err); });
+}else{
+var exit = document.exitFullscreen || document.webkitExitFullscreen;
+if(exit) exit.call(document);
+}
+});
 
 </script>
 
